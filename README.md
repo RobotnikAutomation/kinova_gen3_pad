@@ -11,7 +11,7 @@ The package depends on some Robotnik packages:
 git clone https://github.com/RobotnikAutomation/rcomponent
 ```
 
-This package also depends on kortex msgs:
+This package also depends on kortex driver:
 
 - ros_kortex [🔗](https://github.com/RobotnikAutomation/ros_kortex)
 ```bash
