@@ -68,7 +68,7 @@ install(DIRECTORY include/${PROJECT_NAME}/
 )
 
 install(FILES
-  robotnik_pad_pluginlib.xml
+  kinova_gen3_pad_pluginlib.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
