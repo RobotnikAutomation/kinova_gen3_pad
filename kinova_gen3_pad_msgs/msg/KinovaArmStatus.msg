@@ -1,2 +1,5 @@
 float32 velocity_level
 float32 fingers_closure_percentage
+float32 fingers_closure_percentage_read
+string current_mode
+int16 current_axis
