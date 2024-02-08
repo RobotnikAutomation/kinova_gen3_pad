@@ -14,8 +14,14 @@ find_package(catkin REQUIRED COMPONENTS
   robotnik_pad_msgs
   kortex_driver
   kinova_gen3_pad_msgs
+  tf
+  geometry_msgs
+  std_msgs
 )
 
+# Find Eigen library
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
 
 catkin_package(
   INCLUDE_DIRS include
@@ -39,6 +45,7 @@ add_dependencies(kinova_gen3_pad_plugin ${${PROJECT_NAME}_EXPORTED_TARGETS} ${ca
 ## Specify libraries to link a library or executable target against
 target_link_libraries(kinova_gen3_pad_plugin
   ${catkin_LIBRARIES}
+  ${EIGEN3_LIBS}
 )
 
 # this is the library one to be used with the pluginlib
