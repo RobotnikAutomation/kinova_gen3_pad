@@ -16,6 +16,8 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   pnh_ = ros::NodeHandle(nh, plugin_ns);
   nh_ = ros::NodeHandle();
 
+  moveit_move_to_topic_name_ = "/my_gen3/rising_manipulation_app/move_to";
+  readParam(pnh_, "moveit_move_to_topic_name", moveit_move_to_topic_name_, moveit_move_to_topic_name_, required);
   arm_control_topic_name_ = "/robot/arm/in/cartesian_velocity";
   readParam(pnh_, "arm_control_topic_name", arm_control_topic_name_, arm_control_topic_name_, required);
   arm_base_joint_control_topic_name_ = "/robot/j2s6s200_driver/in/joint_velocity";
@@ -42,6 +44,8 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   readParam(pnh_, "config/axis_angular_z_ee", axis_angular_z_, 9, required);
   readParam(pnh_, "config/button_speed_up", button_speed_up_, 3, required);
   readParam(pnh_, "config/button_speed_down", button_speed_down_, 1, required);
+  readParam(pnh_, "config/button_home", button_home_, 8, required);
+  readParam(pnh_, "config/button_retract", button_retract_, 9, required);
   readParam(pnh_, "config/button_rotate_base_pos", button_rot_base_pos_, 9, required);
   readParam(pnh_, "config/button_rotate_base_neg", button_rot_base_neg_, 10, required);
   readParam(pnh_, "config/button_open_gripper", button_open_gripper_, 0, required);
@@ -56,9 +60,23 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   // Services
   //set_home_service_ = nh_.serviceClient<kinova_msgs::HomeArm>(set_home_service_name_);
   gripper_command_client_ = nh_.serviceClient<kortex_driver::SendGripperCommand>(gripper_command_service_name_);
-  gripper_command_client_.waitForExistence();
+  gripper_command_client_.waitForExistence(ros::Duration(1.0));
+
+  // Reset moveit move to action client
+  move_to_action_client_.reset(
+      new actionlib::SimpleActionClient<rising_manipulation_msgs::MoveToAction>(moveit_move_to_topic_name_));
+
+  // Wait for the action server to start
+  ROS_INFO("Waiting for rising manipulation: MoveTo action server to start.");
+  move_to_action_client_->waitForServer(ros::Duration(1.0)); // will wait for infinite time
+  ROS_INFO("Rising manipulation: MoveTo action server STARTED.");
+
+  move_to_goal_ = rising_manipulation_msgs::MoveToGoal();
+
+  move_to_action_client_->cancelGoal ();
   
   // initialize variables
+  active_moveit_goal_ = false;
   gripper_pressed_flag_ = false;
   current_velocity_level_ = 0.1;
   velocity_level_step_ = 0.1;
@@ -114,6 +132,22 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
     {
        stop_motion_pub_.publish(stop_motion_);
        arm_joint_control_msg_.joint_speeds[0].value = 0.0;
+    }
+
+    if (buttons[button_home_].isReleased())
+    {
+       move_to_action_client_->cancelGoal ();
+       move_to_goal_.to = "home";
+       move_to_action_client_->sendGoal(move_to_goal_);
+       active_moveit_goal_ = true;
+    }
+
+    if (buttons[button_retract_].isReleased())
+    {
+       move_to_action_client_->cancelGoal ();
+       move_to_goal_.to = "front";
+       move_to_action_client_->sendGoal(move_to_goal_);
+       active_moveit_goal_ = true;
     }
 
     if (buttons[button_open_gripper_].isPressed())
@@ -217,19 +251,26 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
     arm_control_msg_.twist.angular_y = - current_velocity_level_ * max_angular_speed_ * axes[axis_angular_y_];
     arm_control_msg_.twist.angular_z = - current_velocity_level_ * max_angular_speed_ * axes[axis_angular_z_] * 2;
 
-
+    if(arm_control_msg_.twist.linear_x != 0.0 || arm_control_msg_.twist.linear_y != 0.0 || arm_control_msg_.twist.linear_z != 0.0 || arm_control_msg_.twist.angular_x != 0 || arm_control_msg_.twist.angular_y != 0 || arm_control_msg_.twist.angular_z !=0){
+      active_moveit_goal_ = false;
+      move_to_action_client_->cancelGoal ();
+    }
 
     if( arm_joint_control_msg_.joint_speeds[0].value != 0)
     {
+      active_moveit_goal_ = false;
+      move_to_action_client_->cancelGoal ();
       arm_base_joint_control_pub_.publish(arm_joint_control_msg_);
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }else{
-      arm_control_pub_.publish(arm_control_msg_);      
+      if (!active_moveit_goal_) {arm_control_pub_.publish(arm_control_msg_);}      
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }
   }
   else if (buttons[button_deadman_].isReleased())
   {
+    active_moveit_goal_ = false;
+    move_to_action_client_->cancelGoal ();
     stop_motion_pub_.publish(stop_motion_);
 
     arm_control_msg_.twist.linear_x = 0.0;

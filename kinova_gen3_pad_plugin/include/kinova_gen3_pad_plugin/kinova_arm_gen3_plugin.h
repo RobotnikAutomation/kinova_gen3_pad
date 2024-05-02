@@ -1,6 +1,7 @@
 #ifndef PAD_PLUGIN_KINOVA_ARM_GEN3_H_
 #define PAD_PLUGIN_KINOVA_ARM_GEN3_H_
 
+#include <ros/ros.h>
 #include <kortex_driver/TwistCommand.h>
 #include <robotnik_pad/generic_pad_plugin.h>
 #include <kinova_gen3_pad_msgs/KinovaArmStatus.h>
@@ -11,7 +12,8 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <Eigen/Dense>
 #include <std_msgs/Empty.h>
-
+#include <actionlib/client/simple_action_client.h>
+#include <rising_manipulation_msgs/MoveToAction.h>
 namespace pad_plugins
 {
 class PadPluginKinovaArmGen3 : public GenericPadPlugin
@@ -33,12 +35,14 @@ protected:
   std::string gripper_command_service_name_;
   std::string base_frame_;
   std::string tool_frame_;
+  std::string moveit_move_to_topic_name_;
   double max_linear_speed_, max_angular_speed_;
   int button_deadman_, button_movement_deadman_, button_home_arm_, button_rot_base_pos_, button_rot_base_neg_, button_open_gripper_, button_close_gripper_;
   int axis_open_gripper_, axis_close_gripper_;
   int axis_linear_x_, axis_linear_y_, axis_linear_z_;
   int axis_angular_x_, axis_angular_y_, axis_angular_z_;
   int button_speed_up_, button_speed_down_;
+  int button_home_, button_retract_;
 
   ros::Publisher arm_control_pub_, arm_base_joint_control_pub_, pad_status_pub_, stop_motion_pub_;
 
@@ -68,6 +72,12 @@ protected:
   tf::StampedTransform transform_, transform_stored_;
   geometry_msgs::TwistStamped transformed_twist_;
   std_msgs::Empty stop_motion_;
+
+  // MoveIt Action client
+  std::shared_ptr<actionlib::SimpleActionClient<rising_manipulation_msgs::MoveToAction>> move_to_action_client_;
+  rising_manipulation_msgs::MoveToGoal move_to_goal_;
+  bool active_moveit_goal_;
+
 };
 }  // namespace pad_plugins
 #endif  // PAD_PLUGIN_ELEVATOR_H_

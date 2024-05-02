@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   geometry_msgs
   std_msgs
+  rising_manipulation_msgs
 )
 
 # Find Eigen library
