@@ -12,6 +12,7 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <Eigen/Dense>
 #include <std_msgs/Empty.h>
+#include <std_msgs/Bool.h>
 #include <actionlib/client/simple_action_client.h>
 #include <rising_manipulation_msgs/MoveToAction.h>
 namespace pad_plugins
@@ -26,6 +27,7 @@ public:
 
   virtual void initialize(const ros::NodeHandle& nh, const std::string& plugin_ns);
   virtual void execute(const std::vector<Button>& buttons, std::vector<float>& axes);
+  void robotEmergencyCB(const std_msgs::Bool::ConstPtr& msg);
 
 protected:
   std::string arm_control_topic_name_;
@@ -77,6 +79,15 @@ protected:
   std::shared_ptr<actionlib::SimpleActionClient<rising_manipulation_msgs::MoveToAction>> move_to_action_client_;
   rising_manipulation_msgs::MoveToGoal move_to_goal_;
   bool active_moveit_goal_;
+
+  //Stop arm if robot in emergency
+  bool ugv_in_emergency_;
+  ros::Subscriber robot_in_emergency_sub_;
+  ros::Publisher kinova_trigger_emergency_;
+  ros::Publisher kinova_clear_faults_;
+  std::string robot_in_emergency_topic_name_, trigger_emergency_topic_name_, clear_faults_topic_name_;
+
+
 
 };
 }  // namespace pad_plugins

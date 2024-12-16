@@ -10,6 +10,23 @@ PadPluginKinovaArmGen3::~PadPluginKinovaArmGen3()
 {
 }
 
+void PadPluginKinovaArmGen3::robotEmergencyCB(const std_msgs::Bool::ConstPtr& msg) 
+{
+  // When receiving a message on the bool topic, store the value and publish the trigger
+  if(msg->data && !ugv_in_emergency_)
+  {
+    kinova_trigger_emergency_.publish(std_msgs::Empty());
+    ugv_in_emergency_ = true;
+  }
+  if(!msg->data && ugv_in_emergency_)
+  {
+    kinova_clear_faults_.publish(std_msgs::Empty());
+    ugv_in_emergency_ = false;
+  }
+
+    
+}
+
 void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::string& plugin_ns)
 {
   bool required = true;
@@ -28,6 +45,13 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   readParam(pnh_, "set_home_service_name", set_home_service_name_, set_home_service_name_, required);
   gripper_command_service_name_ = "/my_gen3/base/send_gripper_command";
   readParam(pnh_, "gripper_command_service_name", gripper_command_service_name_, gripper_command_service_name_, required);
+  robot_in_emergency_topic_name_ = "/robot/robotnik_base_hw/emergency_stop";
+  readParam(pnh_, "robot_in_emergency_topic_name", robot_in_emergency_topic_name_, robot_in_emergency_topic_name_, required);
+  trigger_emergency_topic_name_ = "/my_gen3/in/emergency_stop";
+  readParam(pnh_, "trigger_emergency_topic_name", trigger_emergency_topic_name_, trigger_emergency_topic_name_, required);
+  clear_faults_topic_name_ = "/my_gen3/in/clear_faults";
+  readParam(pnh_, "clear_faults_topic_name", clear_faults_topic_name_, clear_faults_topic_name_, required);
+  
   readParam(pnh_, "max_linear_speed", max_linear_speed_, 2.0, required);
   readParam(pnh_, "max_angular_speed", max_angular_speed_, 3.0, required);
   readParam(pnh_, "max_base_speed", max_base_speed_, 0.5, required);
@@ -56,7 +80,12 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   arm_base_joint_control_pub_ = nh_.advertise<kortex_driver::Base_JointSpeeds>(arm_base_joint_control_topic_name_, 10);
   pad_status_pub_ = pnh_.advertise<kinova_gen3_pad_msgs::KinovaArmStatus>("status", 10);
   stop_motion_pub_ = pnh_.advertise<std_msgs::Empty>(arm_stop_motion_topic_name_, 1);
+  kinova_trigger_emergency_ = pnh_.advertise<std_msgs::Empty>(trigger_emergency_topic_name_, 1);
+  kinova_clear_faults_ = pnh_.advertise<std_msgs::Empty>(clear_faults_topic_name_, 1);
 
+  // Subscribers
+  robot_in_emergency_sub_ = nh_.subscribe(robot_in_emergency_topic_name_, 1, &PadPluginKinovaArmGen3::robotEmergencyCB, this);
+  ugv_in_emergency_ = false;
   // Services
   //set_home_service_ = nh_.serviceClient<kinova_msgs::HomeArm>(set_home_service_name_);
   gripper_command_client_ = nh_.serviceClient<kortex_driver::SendGripperCommand>(gripper_command_service_name_);
@@ -84,6 +113,7 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   min_velocity_level_ = 0.1;
   fingers_closure_percentage_ = 0.0;
   arm_control_msg_ = kortex_driver::TwistCommand();
+  arm_control_msg_.reference_frame = 2;
   arm_status_msg_ = kinova_gen3_pad_msgs::KinovaArmStatus();
   arm_joint_control_msg_ = kortex_driver::Base_JointSpeeds();
   arm_joint_control_msg_.joint_speeds.resize(1);
@@ -92,7 +122,7 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   arm_joint_control_msg_.joint_speeds[0] = arm_base_joint_control_msg_;
   gripper_command_ = kortex_driver::SendGripperCommand();
   gripper_command_.request.input.mode = 2;
-  base_frame_ = "robot_arm_base_link";
+  base_frame_ = "robot_arm_end_effector_link";
   tool_frame_ = "robot_arm_end_effector_link";
   stop_motion_ = std_msgs::Empty();
 }
@@ -263,7 +293,7 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
       arm_base_joint_control_pub_.publish(arm_joint_control_msg_);
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }else{
-      if (!active_moveit_goal_) {arm_control_pub_.publish(arm_control_msg_);}      
+      if (!active_moveit_goal_ && !gripper_pressed_flag_) {arm_control_pub_.publish(arm_control_msg_);}      
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }
   }
@@ -292,5 +322,7 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
   //arm_status_msg_.fingers_closure_percentage = fingers_closure_percentage_;
   pad_status_pub_.publish(arm_status_msg_);
 }
+
+
 
 }  // namespace pad_plugins
