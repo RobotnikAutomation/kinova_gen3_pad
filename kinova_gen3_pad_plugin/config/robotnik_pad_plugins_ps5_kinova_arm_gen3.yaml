@@ -19,17 +19,17 @@ KinovaArmGen3:
 
     axis_linear_x_ee: 0
     axis_linear_y_ee: 1
-    axis_linear_z_ee: 10
+    axis_linear_z_ee: 7
 
-    axis_angular_x_ee: 5
-    axis_angular_y_ee: 2
-    axis_angular_z_ee: 9
+    axis_angular_x_ee: 4
+    axis_angular_y_ee: 3
+    axis_angular_z_ee: 6
 
-    button_speed_up: 3
-    button_speed_down: 1
+    button_speed_up: 2
+    button_speed_down: 0
 
     button_rotate_base_pos: 7
     button_rotate_base_neg: 6
 
-    button_open_gripper: 2
-    button_close_gripper: 0
+    button_open_gripper: 1
+    button_close_gripper: 3
