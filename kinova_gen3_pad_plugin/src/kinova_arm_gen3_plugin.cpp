@@ -12,6 +12,7 @@ PadPluginKinovaArmGen3::~PadPluginKinovaArmGen3()
 
 void PadPluginKinovaArmGen3::robotEmergencyCB(const std_msgs::Bool::ConstPtr& msg) 
 {
+ 
   // When receiving a message on the bool topic, store the value and publish the trigger
   if(msg->data && !ugv_in_emergency_)
   {
@@ -33,16 +34,12 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   pnh_ = ros::NodeHandle(nh, plugin_ns);
   nh_ = ros::NodeHandle();
 
-  moveit_move_to_topic_name_ = "/my_gen3/rising_manipulation_app/move_to";
-  readParam(pnh_, "moveit_move_to_topic_name", moveit_move_to_topic_name_, moveit_move_to_topic_name_, required);
   arm_control_topic_name_ = "/robot/arm/in/cartesian_velocity";
   readParam(pnh_, "arm_control_topic_name", arm_control_topic_name_, arm_control_topic_name_, required);
   arm_base_joint_control_topic_name_ = "/robot/j2s6s200_driver/in/joint_velocity";
   readParam(pnh_, "arm_base_control_topic_name", arm_base_joint_control_topic_name_, arm_base_joint_control_topic_name_, required);
   arm_stop_motion_topic_name_ = "/my_gen3/in/stop";
   readParam(pnh_, "arm_stop_motion_topic_name", arm_stop_motion_topic_name_, arm_stop_motion_topic_name_, required);
-  set_home_service_name_ = "/robot/arm/in/home_arm";
-  readParam(pnh_, "set_home_service_name", set_home_service_name_, set_home_service_name_, required);
   gripper_command_service_name_ = "/my_gen3/base/send_gripper_command";
   readParam(pnh_, "gripper_command_service_name", gripper_command_service_name_, gripper_command_service_name_, required);
   robot_in_emergency_topic_name_ = "/robot/robotnik_base_hw/emergency_stop";
@@ -79,33 +76,19 @@ void PadPluginKinovaArmGen3::initialize(const ros::NodeHandle& nh, const std::st
   arm_control_pub_ = nh_.advertise<kortex_driver::TwistCommand>(arm_control_topic_name_, 10);
   arm_base_joint_control_pub_ = nh_.advertise<kortex_driver::Base_JointSpeeds>(arm_base_joint_control_topic_name_, 10);
   pad_status_pub_ = pnh_.advertise<kinova_gen3_pad_msgs::KinovaArmStatus>("status", 10);
-  stop_motion_pub_ = pnh_.advertise<std_msgs::Empty>(arm_stop_motion_topic_name_, 1);
-  kinova_trigger_emergency_ = pnh_.advertise<std_msgs::Empty>(trigger_emergency_topic_name_, 1);
-  kinova_clear_faults_ = pnh_.advertise<std_msgs::Empty>(clear_faults_topic_name_, 1);
+  stop_motion_pub_ = nh_.advertise<std_msgs::Empty>(arm_stop_motion_topic_name_, 1);
+  kinova_trigger_emergency_ = nh_.advertise<std_msgs::Empty>(trigger_emergency_topic_name_, 1);
+  kinova_clear_faults_ = nh_.advertise<std_msgs::Empty>(clear_faults_topic_name_, 1);
 
   // Subscribers
   robot_in_emergency_sub_ = nh_.subscribe(robot_in_emergency_topic_name_, 1, &PadPluginKinovaArmGen3::robotEmergencyCB, this);
   ugv_in_emergency_ = false;
   // Services
-  //set_home_service_ = nh_.serviceClient<kinova_msgs::HomeArm>(set_home_service_name_);
   gripper_command_client_ = nh_.serviceClient<kortex_driver::SendGripperCommand>(gripper_command_service_name_);
   gripper_command_client_.waitForExistence(ros::Duration(1.0));
 
-  // Reset moveit move to action client
-  move_to_action_client_.reset(
-      new actionlib::SimpleActionClient<rising_manipulation_msgs::MoveToAction>(moveit_move_to_topic_name_));
 
-  // Wait for the action server to start
-  ROS_INFO("Waiting for rising manipulation: MoveTo action server to start.");
-  move_to_action_client_->waitForServer(ros::Duration(1.0)); // will wait for infinite time
-  ROS_INFO("Rising manipulation: MoveTo action server STARTED.");
-
-  move_to_goal_ = rising_manipulation_msgs::MoveToGoal();
-
-  move_to_action_client_->cancelGoal ();
-  
   // initialize variables
-  active_moveit_goal_ = false;
   gripper_pressed_flag_ = false;
   current_velocity_level_ = 0.1;
   velocity_level_step_ = 0.1;
@@ -164,22 +147,6 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
        arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }
 
-    if (buttons[button_home_].isReleased())
-    {
-       move_to_action_client_->cancelGoal ();
-       move_to_goal_.to = "home";
-       move_to_action_client_->sendGoal(move_to_goal_);
-       active_moveit_goal_ = true;
-    }
-
-    if (buttons[button_retract_].isReleased())
-    {
-       move_to_action_client_->cancelGoal ();
-       move_to_goal_.to = "front";
-       move_to_action_client_->sendGoal(move_to_goal_);
-       active_moveit_goal_ = true;
-    }
-
     if (buttons[button_open_gripper_].isPressed())
     {
       if(gripper_pressed_flag_ == false)
@@ -231,8 +198,6 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
     }
 
 
-
-
    try {
         // Get the transform from the tool frame to the base frame
         tf_listener_.waitForTransform(base_frame_, tool_frame_, ros::Time(0), ros::Duration(1.0));
@@ -272,7 +237,6 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
         ROS_WARN("TF transform lookup failed: %s", ex.what());
     }
 
-
     arm_control_msg_.twist.linear_x = current_velocity_level_ * max_linear_speed_ * transformed_twist_.twist.linear.x;
     arm_control_msg_.twist.linear_y = current_velocity_level_ * max_linear_speed_ * transformed_twist_.twist.linear.y;
     arm_control_msg_.twist.linear_z = current_velocity_level_ * max_linear_speed_ * transformed_twist_.twist.linear.z;
@@ -281,26 +245,20 @@ void PadPluginKinovaArmGen3::execute(const std::vector<Button>& buttons, std::ve
     arm_control_msg_.twist.angular_y = - current_velocity_level_ * max_angular_speed_ * axes[axis_angular_y_];
     arm_control_msg_.twist.angular_z = - current_velocity_level_ * max_angular_speed_ * axes[axis_angular_z_] * 2;
 
-    if(arm_control_msg_.twist.linear_x != 0.0 || arm_control_msg_.twist.linear_y != 0.0 || arm_control_msg_.twist.linear_z != 0.0 || arm_control_msg_.twist.angular_x != 0 || arm_control_msg_.twist.angular_y != 0 || arm_control_msg_.twist.angular_z !=0){
-      active_moveit_goal_ = false;
-      move_to_action_client_->cancelGoal ();
-    }
 
     if( arm_joint_control_msg_.joint_speeds[0].value != 0)
     {
-      active_moveit_goal_ = false;
-      move_to_action_client_->cancelGoal ();
+
       arm_base_joint_control_pub_.publish(arm_joint_control_msg_);
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }else{
-      if (!active_moveit_goal_ && !gripper_pressed_flag_) {arm_control_pub_.publish(arm_control_msg_);}      
+      if ( !gripper_pressed_flag_) {arm_control_pub_.publish(arm_control_msg_);}      
       arm_joint_control_msg_.joint_speeds[0].value = 0.0;
     }
+
   }
   else if (buttons[button_deadman_].isReleased())
   {
-    active_moveit_goal_ = false;
-    move_to_action_client_->cancelGoal ();
     stop_motion_pub_.publish(stop_motion_);
 
     arm_control_msg_.twist.linear_x = 0.0;
